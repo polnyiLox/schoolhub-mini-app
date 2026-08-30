@@ -197,7 +197,10 @@ export function SchoolHubApp() {
     queryFn: () => (demoMode ? demoSubjects : api.subjects(activeClassId)),
     enabled:
       Boolean(activeClassId) &&
-      (tab === 'profile' || composer === 'homework' || composer === 'subject'),
+      (tab === 'homework' ||
+        tab === 'profile' ||
+        composer === 'homework' ||
+        composer === 'subject'),
   });
   const members = useQuery({
     queryKey: ['members', activeClassId],
@@ -212,7 +215,7 @@ export function SchoolHubApp() {
             },
           ]
         : api.members(activeClassId),
-    enabled: Boolean(activeClassId) && tab === 'profile',
+    enabled: Boolean(activeClassId),
   });
   const classRole = members.data?.find(
     (item) => item.telegram_id === user?.telegram_id,
@@ -244,7 +247,7 @@ export function SchoolHubApp() {
               {greeting()}, {user.first_name}
             </h1>
           </div>
-          {canEdit && tab !== 'profile' ? (
+          {canEdit && (tab === 'homework' || tab === 'events') ? (
             <Button
               aria-label="Добавить"
               className="rounded-2xl"
@@ -616,7 +619,7 @@ function HomeworkList({
       ) : (
         <div className="space-y-3">
           {items.length ? (
-            items
+            [...items]
               .sort((a, b) => a.due_date.localeCompare(b.due_date))
               .map((item) => (
                 <article
@@ -676,7 +679,7 @@ function EventList({
       ) : (
         <div className="space-y-3">
           {items.length ? (
-            items
+            [...items]
               .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
               .map((event) => (
                 <article

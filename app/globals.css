@@ -133,4 +133,7 @@ body { font-family: var(--font-schoolhub); }
     -webkit-tap-highlight-color: transparent;
   }
   button { cursor: pointer; }
+  .field {
+    @apply h-9 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus:border-ring focus:ring-3 focus:ring-ring/50;
+  }
 }

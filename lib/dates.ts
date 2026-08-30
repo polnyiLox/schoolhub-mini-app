@@ -1,6 +1,14 @@
-const ruDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+const ruDate = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'long',
+});
 const ruWeekday = new Intl.DateTimeFormat('ru-RU', { weekday: 'long' });
-const ruDateTime = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const ruDateTime = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 export function toIsoDate(value: Date): string {
   const year = value.getFullYear();

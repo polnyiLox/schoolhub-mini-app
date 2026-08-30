@@ -6,6 +6,17 @@ import { useState } from 'react';
 import { Toaster } from '@/components/ui/toast';
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const [client] = useState(() => new QueryClient({ defaultOptions: { queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false } } }));
-  return <QueryClientProvider client={client}><Toaster>{children}</Toaster></QueryClientProvider>;
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+        },
+      }),
+  );
+  return (
+    <QueryClientProvider client={client}>
+      <Toaster>{children}</Toaster>
+    </QueryClientProvider>
+  );
 }

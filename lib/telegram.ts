@@ -28,11 +28,15 @@ export interface TelegramWebApp {
 }
 
 declare global {
-  interface Window { Telegram?: { WebApp?: TelegramWebApp } }
+  interface Window {
+    Telegram?: { WebApp?: TelegramWebApp };
+  }
 }
 
 export function getTelegramWebApp(): TelegramWebApp | null {
-  return typeof window === 'undefined' ? null : window.Telegram?.WebApp ?? null;
+  return typeof window === 'undefined'
+    ? null
+    : (window.Telegram?.WebApp ?? null);
 }
 
 export function initializeTelegram(): TelegramWebApp | null {
@@ -41,7 +45,10 @@ export function initializeTelegram(): TelegramWebApp | null {
   webApp.ready();
   webApp.expand();
   webApp.enableClosingConfirmation();
-  document.documentElement.classList.toggle('dark', webApp.colorScheme === 'dark');
+  document.documentElement.classList.toggle(
+    'dark',
+    webApp.colorScheme === 'dark',
+  );
   return webApp;
 }
 

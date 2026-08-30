@@ -20,7 +20,10 @@ export interface TokenPair {
   expires_in: number;
 }
 
-export interface AuthResult { user: User; tokens: TokenPair }
+export interface AuthResult {
+  user: User;
+  tokens: TokenPair;
+}
 
 export interface SchoolClass {
   id: string;
@@ -43,7 +46,11 @@ export interface Subject {
   teacher_name: string | null;
 }
 
-export interface DayHomework { id: string; text: string; due_date: string }
+export interface DayHomework {
+  id: string;
+  text: string;
+  due_date: string;
+}
 
 export interface Lesson {
   lesson_number: number;
@@ -56,8 +63,13 @@ export interface Lesson {
   homeworks?: DayHomework[];
 }
 
-export interface ScheduleDay { date: string; lessons: Lesson[] }
-export interface ScheduleWeek { days: ScheduleDay[] }
+export interface ScheduleDay {
+  date: string;
+  lessons: Lesson[];
+}
+export interface ScheduleWeek {
+  days: ScheduleDay[];
+}
 
 export interface Homework {
   id: string;
@@ -81,7 +93,11 @@ export interface SchoolEvent {
   created_by_telegram_id: number;
 }
 
-export interface ClassDay { date: string; lessons: Lesson[]; events: SchoolEvent[] }
+export interface ClassDay {
+  date: string;
+  lessons: Lesson[];
+  events: SchoolEvent[];
+}
 
 export interface HomeworkInput {
   subject_id: string;

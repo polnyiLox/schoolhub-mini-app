@@ -36,9 +36,12 @@ npm run lint
 npm run build
 ```
 
-Полный локальный стек запускается из `../school-service/docker-compose.full.yaml`. Mini App будет
-доступна на `http://localhost:3001`, API Gateway — на `http://localhost:8080/api`.
+Полный локальный стек запускается из репозитория
+[School Service](https://github.com/polnyiLox/schoolhub-school-service#полное-развертывание-schoolhub).
+Mini App будет доступна на `http://localhost:3001`, API Gateway — на `http://localhost:8080/api`,
+а единый edge-вход — на `http://localhost:3002`.
 
-Для Telegram нужен публичный HTTPS URL frontend и HTTPS URL API Gateway. Публичный адрес Mini App
-нужно указать в BotFather как Main Mini App или Menu Button, а его origin — добавить в
-`CORS_ORIGINS` полного deployment.
+Для Telegram нужен один публичный HTTPS URL, ведущий на edge: frontend использует относительный
+`/api`, поэтому запросы остаются на том же origin. URL задаётся в `MINI_APP_PUBLIC_URL` полного
+deployment; Telegram worker сам регистрирует `/start`, Menu Button и inline WebApp-кнопку через
+Bot API. Для постоянного deployment используй стабильный домен и TLS.

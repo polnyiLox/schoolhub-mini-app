@@ -59,6 +59,9 @@
     "vitest": "^4.1.11",
     "wrangler": "^4.127.1"
   },
+  "overrides": {
+    "sharp": "0.35.4"
+  },
   "type": "module",
   "allowScripts": {
     "esbuild@0.28.1": true,

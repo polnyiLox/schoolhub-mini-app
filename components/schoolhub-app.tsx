@@ -271,6 +271,12 @@ export function SchoolHubApp() {
 
         {classesQuery.isLoading ? (
           <Skeleton className="mt-4 h-14 rounded-2xl" />
+        ) : classesQuery.isError ? (
+          <Empty
+            title="Не удалось загрузить классы"
+            text="Проверьте соединение и попробуйте снова."
+            action={() => void classesQuery.refetch()}
+          />
         ) : classes.length ? (
           <label className="relative mt-4 block">
             <span className="sr-only">Текущий класс</span>
@@ -287,14 +293,20 @@ export function SchoolHubApp() {
             </select>
             <ChevronDown className="pointer-events-none absolute right-4 top-5 size-5 text-muted-foreground" />
           </label>
-        ) : (
+        ) : tab === 'profile' ? null : (
           <Empty
             title="У вас пока нет класса"
             text={
               user.global_role === 'admin'
-                ? 'Создайте первый класс в разделе «Профиль».'
+                ? 'Создайте первый класс, чтобы настроить предметы, участников и расписание.'
                 : 'Попросите администратора добавить ваш Telegram ID.'
             }
+            action={
+              user.global_role === 'admin'
+                ? () => setComposer('class')
+                : undefined
+            }
+            actionLabel="Создать класс"
           />
         )}
 
@@ -330,21 +342,21 @@ export function SchoolHubApp() {
                 onDelete={(id) => void mutateDelete('event', id)}
               />
             )}
-            {tab === 'profile' && (
-              <Profile
-                user={user}
-                selectedClass={selectedClass}
-                role={classRole}
-                members={members.data ?? []}
-                subjects={subjects.data ?? []}
-                onCompose={setComposer}
-                onDeleteMember={(id) => void mutateDelete('member', id)}
-                onDeleteSubject={(id) => void mutateDelete('subject', id)}
-                onLogout={() => void logout()}
-              />
-            )}
           </>
         ) : null}
+        {tab === 'profile' && (
+          <Profile
+            user={user}
+            selectedClass={selectedClass}
+            role={classRole}
+            members={members.data ?? []}
+            subjects={subjects.data ?? []}
+            onCompose={setComposer}
+            onDeleteMember={(id) => void mutateDelete('member', id)}
+            onDeleteSubject={(id) => void mutateDelete('subject', id)}
+            onLogout={() => void logout()}
+          />
+        )}
       </div>
       <BottomNav tab={tab} setTab={setTab} />
       <Composer
@@ -739,7 +751,7 @@ function Profile({
   onLogout,
 }: {
   user: User;
-  selectedClass: SchoolClass;
+  selectedClass?: SchoolClass;
   role?: string;
   members: ClassMember[];
   subjects: Subject[];
@@ -765,42 +777,57 @@ function Profile({
       </div>
       {admin && (
         <div className="rounded-2xl border bg-card p-4">
-          <Title eyebrow="Администрирование" title={selectedClass.name} />
-          <div className="grid grid-cols-3 gap-2">
-            <Quick
-              icon={<UsersRound />}
-              label="Участник"
-              onClick={() => onCompose('member')}
-            />
-            <Quick
-              icon={<BookOpen />}
-              label="Предмет"
-              onClick={() => onCompose('subject')}
-            />
-            <Quick
-              icon={<Plus />}
-              label="Класс"
+          <Title
+            eyebrow="Администрирование"
+            title={selectedClass?.name ?? 'Первый класс'}
+          />
+          {selectedClass ? (
+            <>
+              <div className="grid grid-cols-3 gap-2">
+                <Quick
+                  icon={<UsersRound />}
+                  label="Участник"
+                  onClick={() => onCompose('member')}
+                />
+                <Quick
+                  icon={<BookOpen />}
+                  label="Предмет"
+                  onClick={() => onCompose('subject')}
+                />
+                <Quick
+                  icon={<Plus />}
+                  label="Класс"
+                  onClick={() => onCompose('class')}
+                />
+              </div>
+              <h3 className="mt-5 text-sm font-extrabold">Участники</h3>
+              {members.map((item) => (
+                <Row
+                  key={item.id}
+                  title={String(item.telegram_id)}
+                  meta={item.role}
+                  remove={() => onDeleteMember(item.telegram_id)}
+                />
+              ))}
+              <h3 className="mt-5 text-sm font-extrabold">Предметы</h3>
+              {subjects.map((item) => (
+                <Row
+                  key={item.id}
+                  title={item.name}
+                  meta={item.teacher_name ?? 'Преподаватель не указан'}
+                  remove={() => onDeleteSubject(item.id)}
+                />
+              ))}
+            </>
+          ) : (
+            <Button
+              className="h-11 w-full rounded-xl"
               onClick={() => onCompose('class')}
-            />
-          </div>
-          <h3 className="mt-5 text-sm font-extrabold">Участники</h3>
-          {members.map((item) => (
-            <Row
-              key={item.id}
-              title={String(item.telegram_id)}
-              meta={item.role}
-              remove={() => onDeleteMember(item.telegram_id)}
-            />
-          ))}
-          <h3 className="mt-5 text-sm font-extrabold">Предметы</h3>
-          {subjects.map((item) => (
-            <Row
-              key={item.id}
-              title={item.name}
-              meta={item.teacher_name ?? 'Преподаватель не указан'}
-              remove={() => onDeleteSubject(item.id)}
-            />
-          ))}
+            >
+              <Plus />
+              Создать класс
+            </Button>
+          )}
         </div>
       )}
       <Button
@@ -1033,10 +1060,12 @@ function Empty({
   title,
   text,
   action,
+  actionLabel = 'Повторить',
 }: {
   title: string;
   text: string;
   action?: () => void;
+  actionLabel?: string;
 }) {
   return (
     <div className="mt-5 rounded-2xl border border-dashed bg-card p-6 text-center">
@@ -1044,7 +1073,7 @@ function Empty({
       <p className="mt-1 text-sm text-muted-foreground">{text}</p>
       {action && (
         <Button className="mt-4" variant="outline" onClick={action}>
-          Повторить
+          {actionLabel}
         </Button>
       )}
     </div>

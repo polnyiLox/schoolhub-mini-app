@@ -66,7 +66,7 @@ import type {
 
 type Tab = 'today' | 'schedule' | 'homework' | 'events' | 'profile';
 type Composer = 'homework' | 'event' | 'member' | 'subject' | 'class' | null;
-const demoMode = process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
 function message(error: unknown): string {
   if (error instanceof ApiError) return error.message;

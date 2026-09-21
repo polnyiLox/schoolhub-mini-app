@@ -77,7 +77,7 @@ export class SchoolHubApi {
   private refreshing: Promise<string> | null = null;
 
   constructor(
-    private readonly baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ??
+    private readonly baseUrl = import.meta.env.VITE_API_BASE_URL ??
       DEFAULT_API_URL,
   ) {}
 

@@ -26,7 +26,7 @@ npm run dev
 ```
 
 Для визуальной разработки вне Telegram можно временно установить
-`NEXT_PUBLIC_DEMO_MODE=true`. В production это значение должно оставаться `false`.
+`VITE_DEMO_MODE=true`. В production это значение должно оставаться `false`.
 
 Проверки:
 

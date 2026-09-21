@@ -20,6 +20,7 @@ export interface TelegramWebApp {
   themeParams: TelegramThemeParams;
   ready(): void;
   expand(): void;
+  close(): void;
   enableClosingConfirmation(): void;
   HapticFeedback?: {
     impactOccurred(style: 'light' | 'medium' | 'heavy'): void;

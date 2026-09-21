@@ -34,7 +34,8 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
-import { api, ApiError, readTokens } from '@/lib/api';
+import { api, ApiError } from '@/lib/api';
+import { authenticate } from '@/lib/authenticate';
 import {
   addDays,
   formatDateTime,
@@ -87,7 +88,7 @@ function Gate({
   kind,
   retry,
 }: {
-  kind: 'telegram' | 'error';
+  kind: 'telegram' | 'error' | 'auth';
   retry: () => void;
 }) {
   return (
@@ -99,16 +100,20 @@ function Gate({
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           {kind === 'telegram'
             ? 'Откройте SchoolHub в Telegram'
-            : 'Не удалось войти'}
+            : kind === 'auth'
+              ? 'Не удалось подтвердить вход'
+              : 'Не удалось войти'}
         </h1>
         <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
           {kind === 'telegram'
             ? 'Авторизация использует защищённые данные запуска Mini App. Откройте приложение кнопкой в профиле бота.'
-            : 'Проверьте соединение и перезапустите Mini App.'}
+            : kind === 'auth'
+              ? 'Закройте Mini App и откройте его снова кнопкой в профиле бота. Повторная попытка в этом окне использует те же данные запуска.'
+              : 'Проверьте соединение и перезапустите Mini App.'}
         </p>
         <Button className="mt-5 h-11 w-full rounded-xl" onClick={retry}>
-          <RefreshCw />
-          Попробовать снова
+          {kind === 'auth' ? <LogOut /> : <RefreshCw />}
+          {kind === 'auth' ? 'Закрыть Mini App' : 'Попробовать снова'}
         </Button>
       </section>
     </main>
@@ -118,7 +123,7 @@ function Gate({
 export function SchoolHubApp() {
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<
-    'loading' | 'telegram' | 'error' | 'ready'
+    'loading' | 'telegram' | 'error' | 'auth' | 'ready'
   >(demoMode ? 'ready' : 'loading');
   const [user, setUser] = useState<User | null>(demoMode ? demoUser : null);
   const [tab, setTab] = useState<Tab>('today');
@@ -133,19 +138,18 @@ export function SchoolHubApp() {
     const start = async () => {
       try {
         const webApp = initializeTelegram();
-        if (!webApp?.initData && !readTokens()) {
-          if (active) setPhase('telegram');
-          return;
-        }
-        const authenticated = readTokens()
-          ? await api.me()
-          : (await api.login(webApp!.initData)).user;
+        const authenticated = await authenticate(webApp);
         if (active) {
-          setUser(authenticated);
-          setPhase('ready');
+          if (authenticated) setUser(authenticated);
+          setPhase(authenticated ? 'ready' : 'telegram');
         }
-      } catch {
-        if (active) setPhase('error');
+      } catch (error) {
+        if (active)
+          setPhase(
+            error instanceof ApiError && error.status === 401
+              ? 'auth'
+              : 'error',
+          );
       }
     };
     void start();
@@ -227,8 +231,12 @@ export function SchoolHubApp() {
   if (phase !== 'ready' || !user)
     return (
       <Gate
-        kind={phase === 'telegram' ? 'telegram' : 'error'}
+        kind={phase === 'telegram' || phase === 'auth' ? phase : 'error'}
         retry={() => {
+          if (phase === 'auth') {
+            window.Telegram?.WebApp?.close();
+            return;
+          }
           setPhase('loading');
           setLoginKey((key) => key + 1);
         }}

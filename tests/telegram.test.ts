@@ -16,6 +16,7 @@ function telegram(colorScheme: 'light' | 'dark' = 'light') {
     themeParams: {},
     ready: vi.fn(),
     expand: vi.fn(),
+    close: vi.fn(),
     enableClosingConfirmation: vi.fn(),
     HapticFeedback: { impactOccurred: vi.fn(), notificationOccurred: vi.fn() },
   } satisfies TelegramWebApp;

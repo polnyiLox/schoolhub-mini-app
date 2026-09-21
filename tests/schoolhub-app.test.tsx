@@ -99,3 +99,82 @@ describe('first class onboarding', () => {
     ).toBeInTheDocument();
   });
 });
+
+describe('schedule editing permissions', () => {
+  afterEach(cleanup);
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(api, 'classes').mockResolvedValue([
+      {
+        id: 'class-id',
+        name: '10А',
+        academic_year: '2026/2027',
+        is_archived: false,
+      },
+    ]);
+    vi.spyOn(api, 'classDay').mockResolvedValue({
+      date: '2026-09-21',
+      lessons: [],
+      events: [],
+    });
+    vi.spyOn(api, 'scheduleWeek').mockResolvedValue({
+      days: [{ date: '2026-09-21', lessons: [] }],
+    });
+    vi.spyOn(api, 'subjects').mockResolvedValue([
+      {
+        id: 'subject-id',
+        class_id: 'class-id',
+        name: 'Математика',
+        teacher_name: null,
+      },
+    ]);
+    vi.spyOn(api, 'scheduleEntries').mockResolvedValue([]);
+    vi.spyOn(api, 'scheduleOverrides').mockResolvedValue([]);
+  });
+
+  it.each([
+    { role: 'admin' as const, memberRole: 'student' as const, allowed: true },
+    { role: 'user' as const, memberRole: 'editor' as const, allowed: true },
+    { role: 'user' as const, memberRole: 'student' as const, allowed: false },
+  ])(
+    'shows schedule editing to role=$role member=$memberRole only when allowed',
+    async ({ role, memberRole, allowed }) => {
+      vi.mocked(authenticate).mockResolvedValue({
+        ...admin,
+        global_role: role,
+      });
+      vi.spyOn(api, 'members').mockResolvedValue([
+        {
+          id: 'member-id',
+          class_id: 'class-id',
+          telegram_id: admin.telegram_id,
+          role: memberRole,
+        },
+      ]);
+      renderApp();
+      fireEvent.click(await screen.findByRole('button', { name: 'Неделя' }));
+      expect(await screen.findByText('Уроков нет')).toBeInTheDocument();
+      if (allowed) {
+        expect(
+          await screen.findAllByRole('button', { name: 'Добавить урок' }),
+        ).not.toHaveLength(0);
+      } else {
+        expect(
+          screen.queryByRole('button', { name: 'Добавить урок' }),
+        ).not.toBeInTheDocument();
+      }
+    },
+  );
+
+  it('links the empty home schedule to the weekly editor', async () => {
+    vi.mocked(authenticate).mockResolvedValue(admin);
+    vi.spyOn(api, 'members').mockResolvedValue([]);
+    renderApp();
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Составить расписание' }),
+    );
+    expect(
+      await screen.findAllByRole('button', { name: 'Добавить урок' }),
+    ).not.toHaveLength(0);
+  });
+});

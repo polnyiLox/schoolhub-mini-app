@@ -22,6 +22,8 @@ import {
 import { useEffect, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { ScheduleEntryDialog } from '@/components/schedule-entry-dialog';
+import { ScheduleOverrideEditor } from '@/components/schedule-override-editor';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -60,6 +62,7 @@ import type {
   EventInput,
   HomeworkInput,
   SchoolClass,
+  ScheduleEntry,
   Subject,
   User,
 } from '@/lib/types';
@@ -201,7 +204,9 @@ export function SchoolHubApp() {
     queryFn: () => (demoMode ? demoSubjects : api.subjects(activeClassId)),
     enabled:
       Boolean(activeClassId) &&
-      (tab === 'homework' ||
+      (tab === 'today' ||
+        tab === 'homework' ||
+        tab === 'schedule' ||
         tab === 'profile' ||
         composer === 'homework' ||
         composer === 'subject'),
@@ -314,16 +319,33 @@ export function SchoolHubApp() {
           <>
             {tab === 'today' && (
               <Today
+                classId={activeClassId}
                 date={date}
                 setDate={setDate}
                 data={day.data}
                 loading={day.isLoading}
                 error={day.isError}
                 retry={() => void day.refetch()}
+                canEdit={canEdit && !demoMode}
+                subjects={subjects.data ?? []}
+                onOpenSchedule={() => setTab('schedule')}
               />
             )}
             {tab === 'schedule' && (
-              <Schedule data={week.data} loading={week.isLoading} />
+              <Schedule
+                classId={activeClassId}
+                data={week.data}
+                loading={week.isLoading}
+                error={week.isError}
+                retry={() => void week.refetch()}
+                subjects={subjects.data ?? []}
+                subjectsLoading={subjects.isLoading}
+                subjectsError={subjects.isError}
+                retrySubjects={() => void subjects.refetch()}
+                canEdit={canEdit && !demoMode}
+                admin={user.global_role === 'admin'}
+                onCreateSubject={() => setComposer('subject')}
+              />
             )}
             {tab === 'homework' && (
               <HomeworkList
@@ -449,19 +471,27 @@ export function SchoolHubApp() {
 }
 
 function Today({
+  classId,
   date,
   setDate,
   data,
   loading,
   error,
   retry,
+  canEdit,
+  subjects,
+  onOpenSchedule,
 }: {
+  classId: string;
   date: Date;
   setDate: (date: Date) => void;
   data?: Awaited<ReturnType<typeof api.classDay>>;
   loading: boolean;
   error: boolean;
   retry: () => void;
+  canEdit: boolean;
+  subjects: Subject[];
+  onOpenSchedule: () => void;
 }) {
   return (
     <section className="mt-5">
@@ -510,7 +540,13 @@ function Today({
           ) : (
             <Empty
               title="Уроков нет"
-              text="На этот день расписание свободно."
+              text={
+                canEdit
+                  ? 'Составьте еженедельное расписание или добавьте изменение только на этот день.'
+                  : 'На этот день расписание свободно.'
+              }
+              action={canEdit ? onOpenSchedule : undefined}
+              actionLabel="Составить расписание"
             />
           )}
           {data?.events.map((event) => (
@@ -526,6 +562,14 @@ function Today({
             </article>
           ))}
         </div>
+      )}
+      {canEdit && (
+        <ScheduleOverrideEditor
+          classId={classId}
+          date={toIsoDate(date)}
+          lessons={data?.lessons ?? []}
+          subjects={subjects}
+        />
       )}
     </section>
   );
@@ -582,17 +626,111 @@ function LessonCard({
 }
 
 function Schedule({
+  classId,
   data,
   loading,
+  error,
+  retry,
+  subjects,
+  subjectsLoading,
+  subjectsError,
+  retrySubjects,
+  canEdit,
+  admin,
+  onCreateSubject,
 }: {
+  classId: string;
   data?: Awaited<ReturnType<typeof api.scheduleWeek>>;
   loading: boolean;
+  error: boolean;
+  retry: () => void;
+  subjects: Subject[];
+  subjectsLoading: boolean;
+  subjectsError: boolean;
+  retrySubjects: () => void;
+  canEdit: boolean;
+  admin: boolean;
+  onCreateSubject: () => void;
 }) {
+  const queryClient = useQueryClient();
+  const entriesQuery = useQuery({
+    queryKey: ['schedule-entries', classId],
+    queryFn: () => api.scheduleEntries(classId),
+    enabled: canEdit,
+  });
+  const [editing, setEditing] = useState<{
+    entry?: ScheduleEntry;
+    weekday: number;
+    lessonNumber: number;
+  } | null>(null);
+  const entries = entriesQuery.data ?? [];
+  const canManageEntries = canEdit && entriesQuery.isSuccess;
+  const weekdayOf = (date: string) =>
+    (new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const addForDay = (weekday: number) => {
+    const lessonNumber =
+      Math.max(
+        0,
+        ...entries
+          .filter((entry) => entry.weekday === weekday)
+          .map((entry) => entry.lesson_number),
+      ) + 1;
+    setEditing({ weekday, lessonNumber });
+  };
+  const changed = () => {
+    void queryClient.invalidateQueries({
+      queryKey: ['schedule-entries', classId],
+    });
+    void queryClient.invalidateQueries({ queryKey: ['week', classId] });
+    void queryClient.invalidateQueries({ queryKey: ['day', classId] });
+  };
   return (
     <section className="mt-6">
-      <Title eyebrow="Расписание" title="Учебная неделя" />
+      <div className="flex items-center justify-between gap-3">
+        <Title eyebrow="Расписание" title="Учебная неделя" />
+        {canManageEntries && subjects.length > 0 && (
+          <Button onClick={() => addForDay(0)}>
+            <Plus /> Добавить урок
+          </Button>
+        )}
+      </div>
+      {canEdit && subjectsError && (
+        <Empty
+          title="Не удалось загрузить предметы"
+          text="Проверьте соединение с сервером."
+          action={retrySubjects}
+        />
+      )}
+      {canEdit &&
+        !subjectsLoading &&
+        !subjectsError &&
+        subjects.length === 0 && (
+          <Empty
+            title="Сначала добавьте предмет"
+            text={
+              admin
+                ? 'Предметы нужны, чтобы составить расписание.'
+                : 'Попросите администратора добавить предметы для класса.'
+            }
+            action={admin ? onCreateSubject : undefined}
+            actionLabel="Добавить предмет"
+          />
+        )}
+      {canEdit && entriesQuery.isError && (
+        <Empty
+          title="Не удалось загрузить записи расписания"
+          text="Редактирование недоступно, пока список уроков не загрузится."
+          action={() => void entriesQuery.refetch()}
+        />
+      )}
       {loading ? (
         <CardsLoading />
+      ) : error ? (
+        <Empty
+          title="Расписание не загрузилось"
+          text="Проверьте соединение с сервером."
+          action={retry}
+        />
       ) : (
         <div className="space-y-5">
           {data?.days.map((day) => (
@@ -602,16 +740,63 @@ function Schedule({
               </h3>
               <div className="space-y-2">
                 {day.lessons.length ? (
-                  day.lessons.map((lesson) => (
-                    <LessonCard key={lesson.lesson_number} lesson={lesson} />
-                  ))
+                  day.lessons.map((lesson) => {
+                    const entry = entries.find(
+                      (item) =>
+                        item.weekday === weekdayOf(day.date) &&
+                        item.lesson_number === lesson.lesson_number,
+                    );
+                    return (
+                      <div key={lesson.lesson_number}>
+                        <LessonCard lesson={lesson} />
+                        {canManageEntries && entry && (
+                          <Button
+                            className="mt-1"
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              setEditing({
+                                entry,
+                                weekday: entry.weekday,
+                                lessonNumber: entry.lesson_number,
+                              })
+                            }
+                          >
+                            Изменить постоянный урок
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })
                 ) : (
-                  <p className="text-sm text-muted-foreground">Уроков нет</p>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Уроков нет</p>
+                    {canManageEntries && subjects.length > 0 && (
+                      <Button
+                        className="mt-2"
+                        variant="outline"
+                        onClick={() => addForDay(weekdayOf(day.date))}
+                      >
+                        <Plus /> Добавить урок
+                      </Button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
           ))}
         </div>
+      )}
+      {editing && (
+        <ScheduleEntryDialog
+          classId={classId}
+          subjects={subjects}
+          entry={editing.entry}
+          initialWeekday={editing.weekday}
+          initialLessonNumber={editing.lessonNumber}
+          close={() => setEditing(null)}
+          onChanged={changed}
+        />
       )}
     </section>
   );

@@ -71,6 +71,38 @@ export interface ScheduleWeek {
   days: ScheduleDay[];
 }
 
+export interface ScheduleEntryInput {
+  subject_id: string;
+  weekday: number;
+  lesson_number: number;
+  start_time: string;
+  end_time: string;
+  room: string | null;
+}
+
+export interface ScheduleEntry extends ScheduleEntryInput {
+  id: string;
+  class_id: string;
+}
+
+export type ScheduleOverrideType = 'cancelled' | 'replaced' | 'added';
+
+export interface ScheduleOverrideInput {
+  date: string;
+  lesson_number: number;
+  override_type: ScheduleOverrideType;
+  subject_id: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  room: string | null;
+  reason: string | null;
+}
+
+export interface ScheduleOverride extends ScheduleOverrideInput {
+  id: string;
+  class_id: string;
+}
+
 export interface Homework {
   id: string;
   class_id: string;

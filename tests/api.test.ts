@@ -83,6 +83,68 @@ describe('API client', () => {
       '/v1/classes/class-id/days/2026-01-01',
     );
   });
+  it('loads editable schedule entries', async () => {
+    vi.mocked(fetch).mockResolvedValue(json([]));
+    await new SchoolHubApi('https://api.test').scheduleEntries('class-id');
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'https://api.test/v1/classes/class-id/schedule/entries',
+    );
+  });
+  it('creates and updates a recurring lesson', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json({ id: 'entry-id' }))
+      .mockResolvedValueOnce(json({ id: 'entry-id' }));
+    const client = new SchoolHubApi('https://api.test');
+    const payload = {
+      subject_id: 'subject-id',
+      weekday: 0,
+      lesson_number: 1,
+      start_time: '08:00',
+      end_time: '08:45',
+      room: null,
+    };
+    await client.createScheduleEntry('class-id', payload);
+    await client.updateScheduleEntry('class-id', 'entry-id', payload);
+    expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe('POST');
+    expect(vi.mocked(fetch).mock.calls[1][1]?.method).toBe('PATCH');
+    expect(requestBody(1)).toEqual(payload);
+  });
+  it('loads one-day schedule changes', async () => {
+    vi.mocked(fetch).mockResolvedValue(json([]));
+    await new SchoolHubApi('https://api.test').scheduleOverrides(
+      'class-id',
+      '2026-09-21',
+    );
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'https://api.test/v1/classes/class-id/schedule/overrides/by-date/2026-09-21',
+    );
+  });
+  it('creates, updates, and deletes a one-day schedule change', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json({ id: 'override-id' }))
+      .mockResolvedValueOnce(json({ id: 'override-id' }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new SchoolHubApi('https://api.test');
+    const payload = {
+      date: '2026-09-21',
+      lesson_number: 1,
+      override_type: 'cancelled' as const,
+      subject_id: null,
+      start_time: null,
+      end_time: null,
+      room: null,
+      reason: 'Праздник',
+    };
+    await client.createScheduleOverride('class-id', payload);
+    await client.updateScheduleOverride('class-id', 'override-id', payload);
+    await client.deleteScheduleOverride('class-id', 'override-id');
+    expect(vi.mocked(fetch).mock.calls.map((call) => call[1]?.method)).toEqual([
+      'POST',
+      'PATCH',
+      'DELETE',
+    ]);
+    expect(requestBody(0)).toEqual(payload);
+  });
   it('sends homework payload', async () => {
     saveTokens(tokens);
     vi.mocked(fetch).mockResolvedValue(json({ id: 'hw' }));

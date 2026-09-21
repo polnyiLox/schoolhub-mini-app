@@ -7,6 +7,10 @@ import type {
   Homework,
   HomeworkInput,
   ScheduleWeek,
+  ScheduleEntry,
+  ScheduleEntryInput,
+  ScheduleOverride,
+  ScheduleOverrideInput,
   SchoolClass,
   SchoolEvent,
   Subject,
@@ -151,6 +155,54 @@ export class SchoolHubApi {
     this.request<ClassDay>(`/v1/classes/${classId}/days/${date}`);
   scheduleWeek = (classId: string) =>
     this.request<ScheduleWeek>(`/v1/classes/${classId}/schedule/week`);
+  scheduleEntries = (classId: string) =>
+    this.request<ScheduleEntry[]>(`/v1/classes/${classId}/schedule/entries`);
+  createScheduleEntry = (classId: string, payload: ScheduleEntryInput) =>
+    this.request<ScheduleEntry>(`/v1/classes/${classId}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  updateScheduleEntry = (
+    classId: string,
+    entryId: string,
+    payload: ScheduleEntryInput,
+  ) =>
+    this.request<ScheduleEntry>(`/v1/classes/${classId}/schedule/${entryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  deleteScheduleEntry = (classId: string, entryId: string) =>
+    this.request<void>(`/v1/classes/${classId}/schedule/${entryId}`, {
+      method: 'DELETE',
+    });
+  scheduleOverrides = (classId: string, date: string) =>
+    this.request<ScheduleOverride[]>(
+      `/v1/classes/${classId}/schedule/overrides/by-date/${date}`,
+    );
+  createScheduleOverride = (classId: string, payload: ScheduleOverrideInput) =>
+    this.request<ScheduleOverride>(
+      `/v1/classes/${classId}/schedule/overrides`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      },
+    );
+  updateScheduleOverride = (
+    classId: string,
+    overrideId: string,
+    payload: ScheduleOverrideInput,
+  ) =>
+    this.request<ScheduleOverride>(
+      `/v1/classes/${classId}/schedule/overrides/${overrideId}`,
+      { method: 'PATCH', body: JSON.stringify(payload) },
+    );
+  deleteScheduleOverride = (classId: string, overrideId: string) =>
+    this.request<void>(
+      `/v1/classes/${classId}/schedule/overrides/${overrideId}`,
+      {
+        method: 'DELETE',
+      },
+    );
   homeworks = (classId: string) =>
     this.request<Homework[]>(`/v1/classes/${classId}/homeworks`);
   events = (classId: string) =>

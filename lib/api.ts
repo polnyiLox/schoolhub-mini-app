@@ -5,6 +5,7 @@ import type {
   EventInput,
   GatewayErrorBody,
   Homework,
+  HomeworkCompletion,
   HomeworkInput,
   ScheduleWeek,
   ScheduleEntry,
@@ -150,6 +151,10 @@ export class SchoolHubApi {
   }
 
   me = () => this.request<User>('/v1/users/me');
+  resolveUser = (username: string) =>
+    this.request<User>(
+      `/v1/users/resolve?username=${encodeURIComponent(username)}`,
+    );
   classes = () => this.request<SchoolClass[]>('/v1/classes');
   classDay = (classId: string, date: string) =>
     this.request<ClassDay>(`/v1/classes/${classId}/days/${date}`);
@@ -205,6 +210,20 @@ export class SchoolHubApi {
     );
   homeworks = (classId: string) =>
     this.request<Homework[]>(`/v1/classes/${classId}/homeworks`);
+  homeworkCompletions = (classId: string) =>
+    this.request<HomeworkCompletion[]>(
+      `/v1/classes/${classId}/homeworks/completions`,
+    );
+  markHomeworkCompleted = (classId: string, homeworkId: string) =>
+    this.request<HomeworkCompletion>(
+      `/v1/classes/${classId}/homeworks/${homeworkId}/completion`,
+      { method: 'PUT' },
+    );
+  markHomeworkIncomplete = (classId: string, homeworkId: string) =>
+    this.request<void>(
+      `/v1/classes/${classId}/homeworks/${homeworkId}/completion`,
+      { method: 'DELETE' },
+    );
   events = (classId: string) =>
     this.request<SchoolEvent[]>(`/v1/classes/${classId}/events`);
   subjects = (classId: string) =>

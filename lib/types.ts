@@ -114,6 +114,12 @@ export interface Homework {
   updated_by_telegram_id: number | null;
 }
 
+export interface HomeworkCompletion {
+  id: string;
+  homework_id: string;
+  completed_at: string;
+}
+
 export interface SchoolEvent {
   id: string;
   class_id: string;

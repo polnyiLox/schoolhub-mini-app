@@ -158,6 +158,40 @@ describe('API client', () => {
     expect(vi.mocked(fetch).mock.calls[0][1]?.method).toBe('POST');
     expect(requestBody()).toEqual(payload);
   });
+
+  it('resolves a Telegram account by username', async () => {
+    vi.mocked(fetch).mockResolvedValue(json({ telegram_id: 123 }));
+    const client = new SchoolHubApi('https://api.test');
+
+    await client.resolveUser('@student_name');
+
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/v1/users/resolve?username=%40student_name'),
+      expect.any(Object),
+    );
+  });
+
+  it('loads and changes personal homework completion', async () => {
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(json([]))
+      .mockResolvedValueOnce(json({ homework_id: 'homework-id' }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const client = new SchoolHubApi('https://api.test');
+    await client.homeworkCompletions('class-id');
+    await client.markHomeworkCompleted('class-id', 'homework-id');
+    await client.markHomeworkIncomplete('class-id', 'homework-id');
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('/homeworks/homework-id/completion'),
+      expect.objectContaining({ method: 'PUT' }),
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      3,
+      expect.stringContaining('/homeworks/homework-id/completion'),
+      expect.objectContaining({ method: 'DELETE' }),
+    );
+  });
   it('accepts a no-content delete', async () => {
     vi.mocked(fetch).mockResolvedValue(new Response(null, { status: 204 }));
     await expect(

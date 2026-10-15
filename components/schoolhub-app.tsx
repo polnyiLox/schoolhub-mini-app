@@ -4,14 +4,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen,
   CalendarDays,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  Circle,
   Clock3,
   Home,
   LogOut,
   MapPin,
+  Megaphone,
   Plus,
   RefreshCw,
   Sparkles,
@@ -68,7 +71,14 @@ import type {
 } from '@/lib/types';
 
 type Tab = 'today' | 'schedule' | 'homework' | 'events' | 'profile';
-type Composer = 'homework' | 'event' | 'member' | 'subject' | 'class' | null;
+type Composer =
+  | 'homework'
+  | 'event'
+  | 'reminder'
+  | 'member'
+  | 'subject'
+  | 'class'
+  | null;
 const demoMode = import.meta.env.VITE_DEMO_MODE === 'true';
 
 function message(error: unknown): string {
@@ -194,6 +204,15 @@ export function SchoolHubApp() {
     enabled:
       Boolean(activeClassId) && (tab === 'homework' || composer === 'homework'),
   });
+  const completions = useQuery({
+    queryKey: ['homework-completions', activeClassId],
+    queryFn: () => (demoMode ? [] : api.homeworkCompletions(activeClassId)),
+    enabled:
+      Boolean(activeClassId) && (tab === 'today' || tab === 'homework'),
+  });
+  const completedHomeworkIds = new Set(
+    completions.data?.map((item) => item.homework_id) ?? [],
+  );
   const events = useQuery({
     queryKey: ['events', activeClassId],
     queryFn: () => (demoMode ? demoEvents : api.events(activeClassId)),
@@ -329,6 +348,9 @@ export function SchoolHubApp() {
                 canEdit={canEdit && !demoMode}
                 subjects={subjects.data ?? []}
                 onOpenSchedule={() => setTab('schedule')}
+                onCreateReminder={() => setComposer('reminder')}
+                completedHomeworkIds={completedHomeworkIds}
+                onToggleHomework={(id) => void toggleHomework(id)}
               />
             )}
             {tab === 'schedule' && (
@@ -354,6 +376,8 @@ export function SchoolHubApp() {
                 loading={homeworks.isLoading}
                 canEdit={canEdit}
                 onDelete={(id) => void mutateDelete('homework', id)}
+                completedHomeworkIds={completedHomeworkIds}
+                onToggle={(id) => void toggleHomework(id)}
               />
             )}
             {tab === 'events' && (
@@ -386,6 +410,7 @@ export function SchoolHubApp() {
         close={() => setComposer(null)}
         classId={activeClassId}
         subjects={subjects.data ?? []}
+        selectedDate={date}
         submit={submitComposer}
       />
     </main>
@@ -404,12 +429,11 @@ export function SchoolHubApp() {
     try {
       if (composer === 'homework')
         await api.createHomework(activeClassId, payload as HomeworkInput);
-      if (composer === 'event')
+      if (composer === 'event' || composer === 'reminder')
         await api.createEvent(activeClassId, payload as EventInput);
       if (composer === 'member')
-        await api.addMember(
-          activeClassId,
-          payload as { telegram_id: number; role: 'student' | 'editor' },
+        await addMemberByAccount(
+          payload as { account: string; role: 'student' | 'editor' },
         );
       if (composer === 'subject')
         await api.createSubject(
@@ -434,6 +458,44 @@ export function SchoolHubApp() {
       hapticError();
       toast.add({
         title: 'Ошибка',
+        description: message(error),
+        type: 'error',
+      });
+    }
+  }
+  async function addMemberByAccount(payload: {
+    account: string;
+    role: 'student' | 'editor';
+  }) {
+    const account = payload.account.trim();
+    const telegramId = account.startsWith('@')
+      ? (await api.resolveUser(account)).telegram_id
+      : Number(account);
+    if (!Number.isSafeInteger(telegramId) || telegramId <= 0)
+      throw new ApiError(
+        422,
+        'invalid_telegram_account',
+        'Укажите @username или числовой Telegram ID.',
+      );
+    await api.addMember(activeClassId, {
+      telegram_id: telegramId,
+      role: payload.role,
+    });
+  }
+  async function toggleHomework(homeworkId: string) {
+    if (demoMode) return;
+    try {
+      if (completedHomeworkIds.has(homeworkId))
+        await api.markHomeworkIncomplete(activeClassId, homeworkId);
+      else await api.markHomeworkCompleted(activeClassId, homeworkId);
+      hapticSuccess();
+      await queryClient.invalidateQueries({
+        queryKey: ['homework-completions', activeClassId],
+      });
+    } catch (error) {
+      hapticError();
+      toast.add({
+        title: 'Не удалось изменить отметку',
         description: message(error),
         type: 'error',
       });
@@ -481,6 +543,9 @@ function Today({
   canEdit,
   subjects,
   onOpenSchedule,
+  onCreateReminder,
+  completedHomeworkIds,
+  onToggleHomework,
 }: {
   classId: string;
   date: Date;
@@ -492,7 +557,13 @@ function Today({
   canEdit: boolean;
   subjects: Subject[];
   onOpenSchedule: () => void;
+  onCreateReminder: () => void;
+  completedHomeworkIds: Set<string>;
+  onToggleHomework: (id: string) => void;
 }) {
+  const isSunday = (data?.date ? new Date(`${data.date}T12:00:00`) : date).getDay() === 0;
+  const reminders = data?.events.filter((event) => event.event_type === 'reminder') ?? [];
+  const otherEvents = data?.events.filter((event) => event.event_type !== 'reminder') ?? [];
   return (
     <section className="mt-5">
       <div className="flex items-center justify-between rounded-[1.7rem] bg-[#1946aa] p-4 text-white shadow-lg">
@@ -523,6 +594,14 @@ function Today({
           <ChevronRight />
         </Button>
       </div>
+      {canEdit && (
+        <Button
+          className="mt-3 h-11 w-full rounded-xl bg-amber-500 text-amber-950 hover:bg-amber-400"
+          onClick={onCreateReminder}
+        >
+          <Megaphone /> Добавить важное на день
+        </Button>
+      )}
       {loading ? (
         <CardsLoading />
       ) : error ? (
@@ -533,23 +612,46 @@ function Today({
         />
       ) : (
         <div className="mt-5 space-y-3">
+          {reminders.map((event) => (
+            <article
+              key={event.id}
+              className="rounded-[1.4rem] border-2 border-amber-400 bg-gradient-to-br from-amber-100 to-orange-100 p-4 text-amber-950 shadow-md"
+            >
+              <Badge className="bg-amber-500 text-amber-950">
+                <Megaphone className="mr-1 size-3.5" /> Важное на день
+              </Badge>
+              <h3 className="mt-3 text-lg font-extrabold">{event.title}</h3>
+              {event.description && (
+                <p className="mt-2 font-medium leading-relaxed">
+                  {event.description}
+                </p>
+              )}
+            </article>
+          ))}
           {data?.lessons.length ? (
             data.lessons.map((lesson) => (
-              <LessonCard key={lesson.lesson_number} lesson={lesson} />
+              <LessonCard
+                key={lesson.lesson_number}
+                lesson={lesson}
+                completedHomeworkIds={completedHomeworkIds}
+                onToggleHomework={onToggleHomework}
+              />
             ))
           ) : (
             <Empty
-              title="Уроков нет"
+              title={isSunday ? 'Воскресенье — выходной' : 'Уроков нет'}
               text={
-                canEdit
+                isSunday
+                  ? 'Отдыхайте и набирайтесь сил перед новой неделей.'
+                  : canEdit
                   ? 'Составьте еженедельное расписание или добавьте изменение только на этот день.'
                   : 'На этот день расписание свободно.'
               }
-              action={canEdit ? onOpenSchedule : undefined}
+              action={canEdit && !isSunday ? onOpenSchedule : undefined}
               actionLabel="Составить расписание"
             />
           )}
-          {data?.events.map((event) => (
+          {otherEvents.map((event) => (
             <article
               key={event.id}
               className="rounded-2xl border border-[#ffdcb1] bg-[#fff7e9] p-4 text-[#332717]"
@@ -577,8 +679,12 @@ function Today({
 
 function LessonCard({
   lesson,
+  completedHomeworkIds = new Set<string>(),
+  onToggleHomework,
 }: {
   lesson: Awaited<ReturnType<typeof api.classDay>>['lessons'][number];
+  completedHomeworkIds?: Set<string>;
+  onToggleHomework?: (id: string) => void;
 }) {
   const cancelled = lesson.status === 'cancelled';
   return (
@@ -611,13 +717,24 @@ function LessonCard({
             )}
           </div>
           {lesson.homeworks?.map((homework) => (
-            <div
+            <button
+              type="button"
               key={homework.id}
-              className="mt-3 rounded-xl bg-muted px-3 py-2 text-sm"
+              className={`mt-3 flex w-full items-start rounded-xl px-3 py-2 text-left text-sm ${
+                completedHomeworkIds.has(homework.id)
+                  ? 'bg-emerald-50 text-emerald-800 line-through'
+                  : 'bg-muted'
+              }`}
+              onClick={() => onToggleHomework?.(homework.id)}
+              disabled={!onToggleHomework}
             >
-              <BookOpen className="mr-2 inline size-4 text-primary" />
-              {homework.text}
-            </div>
+              {completedHomeworkIds.has(homework.id) ? (
+                <CheckCircle2 className="mr-2 mt-0.5 size-4 shrink-0" />
+              ) : (
+                <Circle className="mr-2 mt-0.5 size-4 shrink-0 text-primary" />
+              )}
+              <span>{homework.text}</span>
+            </button>
           ))}
         </div>
       </div>
@@ -770,8 +887,14 @@ function Schedule({
                   })
                 ) : (
                   <div>
-                    <p className="text-sm text-muted-foreground">Уроков нет</p>
-                    {canManageEntries && subjects.length > 0 && (
+                    <p className="text-sm font-medium text-muted-foreground">
+                      {weekdayOf(day.date) === 6
+                        ? 'Выходной день'
+                        : 'Уроков нет'}
+                    </p>
+                    {canManageEntries &&
+                      subjects.length > 0 &&
+                      weekdayOf(day.date) !== 6 && (
                       <Button
                         className="mt-2"
                         variant="outline"
@@ -779,7 +902,7 @@ function Schedule({
                       >
                         <Plus /> Добавить урок
                       </Button>
-                    )}
+                      )}
                   </div>
                 )}
               </div>
@@ -808,12 +931,16 @@ function HomeworkList({
   loading,
   canEdit,
   onDelete,
+  completedHomeworkIds,
+  onToggle,
 }: {
   items: Awaited<ReturnType<typeof api.homeworks>>;
   subjects: Subject[];
   loading: boolean;
   canEdit: boolean;
   onDelete: (id: string) => void;
+  completedHomeworkIds: Set<string>;
+  onToggle: (id: string) => void;
 }) {
   const names = new Map(subjects.map((item) => [item.id, item.name]));
   return (
@@ -829,20 +956,41 @@ function HomeworkList({
               .map((item) => (
                 <article
                   key={item.id}
-                  className="rounded-2xl border bg-card p-4"
+                  className={`rounded-2xl border p-4 transition-colors ${
+                    completedHomeworkIds.has(item.id)
+                      ? 'border-emerald-200 bg-emerald-50/70'
+                      : 'bg-card'
+                  }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      onClick={() => onToggle(item.id)}
+                    >
+                      {completedHomeworkIds.has(item.id) ? (
+                        <CheckCircle2 className="mt-0.5 size-6 shrink-0 text-emerald-600" />
+                      ) : (
+                        <Circle className="mt-0.5 size-6 shrink-0 text-muted-foreground" />
+                      )}
+                      <div>
                       <Badge variant="secondary">
                         {names.get(item.subject_id) ?? 'Предмет'}
                       </Badge>
-                      <p className="mt-2 font-semibold leading-relaxed">
+                      <p
+                        className={`mt-2 font-semibold leading-relaxed ${
+                          completedHomeworkIds.has(item.id)
+                            ? 'text-emerald-800 line-through'
+                            : ''
+                        }`}
+                      >
                         {item.text}
                       </p>
                       <p className="mt-2 text-xs font-bold text-muted-foreground">
                         Сдать {formatDay(item.due_date)}
                       </p>
-                    </div>
+                      </div>
+                    </button>
                     {canEdit && (
                       <Button
                         aria-label="Удалить задание"
@@ -1032,12 +1180,14 @@ function Composer({
   close,
   classId,
   subjects,
+  selectedDate,
   submit,
 }: {
   kind: Composer;
   close: () => void;
   classId: string;
   subjects: Subject[];
+  selectedDate: Date;
   submit: (payload: unknown) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
@@ -1058,11 +1208,11 @@ function Composer({
         due_date: value('due_date'),
         text: value('text'),
       };
-    if (kind === 'event')
+    if (kind === 'event' || kind === 'reminder')
       payload = {
         title: value('title'),
         description: value('description') || null,
-        event_type: value('event_type'),
+        event_type: kind === 'reminder' ? 'reminder' : value('event_type'),
         starts_at: new Date(value('starts_at')).toISOString(),
         ends_at: value('ends_at')
           ? new Date(value('ends_at')).toISOString()
@@ -1070,7 +1220,7 @@ function Composer({
       };
     if (kind === 'member')
       payload = {
-        telegram_id: Number(value('telegram_id')),
+        account: value('account'),
         role: value('role'),
       };
     await submit(payload);
@@ -1079,6 +1229,7 @@ function Composer({
   const titles = {
     homework: 'Новое задание',
     event: 'Новое событие',
+    reminder: 'Важное на день',
     member: 'Добавить участника',
     subject: 'Новый предмет',
     class: 'Новый класс',
@@ -1130,35 +1281,69 @@ function Composer({
               </Field>
             </>
           )}
-          {kind === 'event' && (
+          {(kind === 'event' || kind === 'reminder') && (
             <>
               <Field label="Название">
-                <Input name="title" required />
+                <Input
+                  name="title"
+                  placeholder={
+                    kind === 'reminder' ? 'Например, принести тетрадь' : undefined
+                  }
+                  required
+                />
               </Field>
-              <Field label="Тип">
-                <select className="field" name="event_type">
-                  <option value="exam">Экзамен</option>
-                  <option value="meeting">Собрание</option>
-                  <option value="trip">Поездка</option>
-                  <option value="reminder">Напоминание</option>
-                  <option value="other">Другое</option>
-                </select>
-              </Field>
+              {kind === 'event' && (
+                <Field label="Тип">
+                  <select className="field" name="event_type">
+                    <option value="exam">Экзамен</option>
+                    <option value="meeting">Собрание</option>
+                    <option value="trip">Поездка</option>
+                    <option value="reminder">Напоминание</option>
+                    <option value="other">Другое</option>
+                  </select>
+                </Field>
+              )}
               <Field label="Начало">
-                <Input name="starts_at" type="datetime-local" required />
+                <Input
+                  name="starts_at"
+                  type="datetime-local"
+                  defaultValue={
+                    kind === 'reminder'
+                      ? `${toIsoDate(selectedDate)}T08:00`
+                      : undefined
+                  }
+                  required
+                />
               </Field>
-              <Field label="Окончание">
-                <Input name="ends_at" type="datetime-local" />
-              </Field>
+              {kind === 'event' && (
+                <Field label="Окончание">
+                  <Input name="ends_at" type="datetime-local" />
+                </Field>
+              )}
               <Field label="Описание">
-                <Textarea name="description" />
+                <Textarea
+                  name="description"
+                  placeholder={
+                    kind === 'reminder'
+                      ? 'Почему это важно и что нужно сделать'
+                      : undefined
+                  }
+                />
               </Field>
             </>
           )}
           {kind === 'member' && (
             <>
-              <Field label="Telegram ID">
-                <Input name="telegram_id" type="number" required />
+              <Field label="Telegram username или ID">
+                <Input
+                  name="account"
+                  placeholder="@username или 123456789"
+                  pattern="(@[A-Za-z0-9_]{1,64}|[0-9]+)"
+                  required
+                />
+                <p className="mt-1 text-xs font-normal text-muted-foreground">
+                  Пользователь должен хотя бы раз открыть бота SchoolHub.
+                </p>
               </Field>
               <Field label="Роль">
                 <select className="field" name="role">

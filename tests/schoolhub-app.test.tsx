@@ -1,5 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SchoolHubApp } from '@/components/schoolhub-app';
@@ -130,6 +136,7 @@ describe('schedule editing permissions', () => {
     ]);
     vi.spyOn(api, 'scheduleEntries').mockResolvedValue([]);
     vi.spyOn(api, 'scheduleOverrides').mockResolvedValue([]);
+    vi.spyOn(api, 'homeworkCompletions').mockResolvedValue([]);
   });
 
   it.each([
@@ -176,5 +183,118 @@ describe('schedule editing permissions', () => {
     expect(
       await screen.findAllByRole('button', { name: 'Добавить урок' }),
     ).not.toHaveLength(0);
+  });
+
+  it('shows Sunday as a day off', async () => {
+    vi.mocked(authenticate).mockResolvedValue(admin);
+    vi.spyOn(api, 'members').mockResolvedValue([]);
+    vi.spyOn(api, 'classDay').mockResolvedValue({
+      date: '2026-09-20',
+      lessons: [],
+      events: [],
+    });
+
+    renderApp();
+
+    expect(
+      await screen.findByText('Воскресенье — выходной'),
+    ).toBeInTheDocument();
+  });
+
+  it('highlights an important daily reminder', async () => {
+    vi.mocked(authenticate).mockResolvedValue(admin);
+    vi.spyOn(api, 'members').mockResolvedValue([]);
+    vi.spyOn(api, 'classDay').mockResolvedValue({
+      date: '2026-09-21',
+      lessons: [],
+      events: [
+        {
+          id: 'reminder-id',
+          class_id: 'class-id',
+          title: 'Принести тетрадь',
+          description: 'Без тетради будет двойка',
+          event_type: 'reminder',
+          starts_at: '2026-09-21T08:00:00+04:00',
+          ends_at: null,
+          created_by_telegram_id: 123,
+        },
+      ],
+    });
+
+    renderApp();
+
+    expect(await screen.findByText('Важное на день')).toBeInTheDocument();
+    expect(screen.getByText('Принести тетрадь')).toBeInTheDocument();
+    expect(screen.getByText('Без тетради будет двойка')).toBeInTheDocument();
+  });
+
+  it('adds a class member by Telegram username', async () => {
+    vi.mocked(authenticate).mockResolvedValue(admin);
+    vi.spyOn(api, 'members').mockResolvedValue([]);
+    const resolveUser = vi.spyOn(api, 'resolveUser').mockResolvedValue({
+      ...admin,
+      telegram_id: 777,
+      username: 'student_name',
+    });
+    const addMember = vi.spyOn(api, 'addMember').mockResolvedValue({
+      id: 'member-id',
+      class_id: 'class-id',
+      telegram_id: 777,
+      role: 'student',
+    });
+
+    renderApp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Профиль' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Участник' }));
+    fireEvent.change(
+      screen.getByRole('textbox', { name: /Telegram username или ID/ }),
+      { target: { value: '@student_name' } },
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(resolveUser).toHaveBeenCalledWith('@student_name'));
+    expect(addMember).toHaveBeenCalledWith('class-id', {
+      telegram_id: 777,
+      role: 'student',
+    });
+  });
+
+  it('lets a student mark personal homework as completed', async () => {
+    vi.mocked(authenticate).mockResolvedValue({ ...admin, global_role: 'user' });
+    vi.spyOn(api, 'members').mockResolvedValue([
+      {
+        id: 'member-id',
+        class_id: 'class-id',
+        telegram_id: 123,
+        role: 'student',
+      },
+    ]);
+    vi.spyOn(api, 'homeworks').mockResolvedValue([
+      {
+        id: 'homework-id',
+        class_id: 'class-id',
+        subject_id: 'subject-id',
+        assigned_date: '2026-09-20',
+        due_date: '2026-09-21',
+        text: 'Решить задачу 10',
+        created_by_telegram_id: 123,
+        updated_by_telegram_id: null,
+      },
+    ]);
+    const markCompleted = vi
+      .spyOn(api, 'markHomeworkCompleted')
+      .mockResolvedValue({
+        id: 'completion-id',
+        homework_id: 'homework-id',
+        completed_at: '2026-09-21T08:00:00Z',
+      });
+
+    renderApp();
+    fireEvent.click(await screen.findByRole('button', { name: 'Задания' }));
+    fireEvent.click(await screen.findByText('Решить задачу 10'));
+
+    await waitFor(() =>
+      expect(markCompleted).toHaveBeenCalledWith('class-id', 'homework-id'),
+    );
   });
 });

@@ -171,6 +171,39 @@ describe('API client', () => {
     );
   });
 
+  it('explains Mini App registration when a username is unknown', async () => {
+    vi.mocked(fetch).mockResolvedValue(
+      json(
+        { error: { code: 'user_not_found', message: 'User not found' } },
+        404,
+      ),
+    );
+
+    await expect(
+      new SchoolHubApi('https://api.test').resolveUser('@unknown'),
+    ).rejects.toMatchObject({
+      status: 404,
+      code: 'user_not_found',
+      message: expect.stringContaining('нажать «Открыть SchoolHub»'),
+    });
+  });
+
+  it.each([403, 404, 503])(
+    'preserves unrelated lookup errors (%s)',
+    async (status) => {
+      vi.mocked(fetch).mockResolvedValue(
+        json(
+          { error: { code: 'upstream_error', message: 'Original error' } },
+          status,
+        ),
+      );
+
+      await expect(
+        new SchoolHubApi('https://api.test').resolveUser('@student'),
+      ).rejects.toMatchObject({ status, message: 'Original error' });
+    },
+  );
+
   it('loads and changes personal homework completion', async () => {
     vi.mocked(fetch)
       .mockResolvedValueOnce(json([]))

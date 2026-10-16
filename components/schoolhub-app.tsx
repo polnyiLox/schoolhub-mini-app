@@ -1342,7 +1342,7 @@ function Composer({
                   required
                 />
                 <p className="mt-1 text-xs font-normal text-muted-foreground">
-                  Пользователь должен хотя бы раз открыть бота SchoolHub.
+                  Для добавления по @username ученик должен открыть бота, нажать «Открыть SchoolHub» и дождаться загрузки мини-приложения. Одной команды /start недостаточно.
                 </p>
               </Field>
               <Field label="Роль">

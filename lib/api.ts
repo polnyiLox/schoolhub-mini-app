@@ -151,10 +151,26 @@ export class SchoolHubApi {
   }
 
   me = () => this.request<User>('/v1/users/me');
-  resolveUser = (username: string) =>
-    this.request<User>(
-      `/v1/users/resolve?username=${encodeURIComponent(username)}`,
-    );
+  async resolveUser(username: string): Promise<User> {
+    try {
+      return await this.request<User>(
+        `/v1/users/resolve?username=${encodeURIComponent(username)}`,
+      );
+    } catch (error) {
+      if (
+        error instanceof ApiError &&
+        error.status === 404 &&
+        error.code === 'user_not_found'
+      ) {
+        throw new ApiError(
+          error.status,
+          error.code,
+          'Пользователь не найден в SchoolHub. Проверьте @username. Попросите ученика открыть бота и нажать «Открыть SchoolHub», дождаться загрузки мини-приложения, затем повторите добавление. Одной команды /start недостаточно.',
+        );
+      }
+      throw error;
+    }
+  }
   classes = () => this.request<SchoolClass[]>('/v1/classes');
   classDay = (classId: string, date: string) =>
     this.request<ClassDay>(`/v1/classes/${classId}/days/${date}`);
